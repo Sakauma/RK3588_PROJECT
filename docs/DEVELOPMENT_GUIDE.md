@@ -30,7 +30,10 @@
 ## 配置重点
 
 - `FRAME_WIDTH`、`FRAME_HEIGHT` 必须与 RAW16 输入一致。
-- `RAW16_SHIFT=8` 表示取 RAW16 高 8 bit 作为亮度。
+- `RAW16_MAP_MODE=shift` 保持原始高速路径，`RAW16_SHIFT=8` 表示取 RAW16 高 8 bit 作为亮度。
+- 若需要保留更多灰度细节，优先用 `RAW16_MAP_MODE=window` 并设置 `RAW16_BLACK_LEVEL`、`RAW16_WHITE_LEVEL`，把传感器有效灰度区间映射到 0-255。
+- 场景亮度变化较大时可用 `RAW16_MAP_MODE=auto_window`，通过 `RAW16_AUTO_LOW_CLIP_PERMILLE` 和 `RAW16_AUTO_HIGH_CLIP_PERMILLE` 裁掉少量离群点后自动拉伸。
+- 当前官方 MPP 编码链路按 8-bit NV12 接入；官方源码中的 10-bit YUV 格式定义主要不能直接等同于可用的 H.265 Main10 编码输入。若后续必须输出 10-bit 码流，需要先在板端用供应商 MPP/驱动确认 Main10 编码支持。
 - `INPUT_HAS_IMG_DMA_HEADER=1` 时，管线会跳过 `CVG_GLKIMG_DMAHD` 图像头。
 - `ENCODER_QUEUE_DEPTH` 控制实时性；队列满时丢弃最旧帧。
 

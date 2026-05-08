@@ -169,6 +169,11 @@ void EncoderPipeline::WorkerLoop()
 			ver_stride_,
 			config_.raw16_shift,
 			config_.raw16_little_endian,
+			config_.raw16_mapping_mode,
+			config_.raw16_black_level,
+			config_.raw16_white_level,
+			config_.raw16_auto_low_clip_permille,
+			config_.raw16_auto_high_clip_permille,
 			&nv12);
 
 		if (!converted)

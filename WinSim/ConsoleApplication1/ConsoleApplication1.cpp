@@ -382,6 +382,7 @@ static void LoadEncoderConfig(EncoderPipelineConfig* pstConfig)
 	char acCodec[32];
 	char acOutput[MAX_FILE_PATH_LEN];
 	char acOsdMode[32];
+	char acRaw16MapMode[32];
 
 	if (pstConfig == NULL)
 	{
@@ -393,6 +394,10 @@ static void LoadEncoderConfig(EncoderPipelineConfig* pstConfig)
 	pstConfig->fps = ReadSimpleConfig(CONFIG_FILE_NAME, "FRAME_FPS", 30);
 	pstConfig->bitrate = ReadSimpleConfig(CONFIG_FILE_NAME, "VIDEO_BITRATE", 8000000);
 	pstConfig->raw16_shift = ReadSimpleConfig(CONFIG_FILE_NAME, "RAW16_SHIFT", 8);
+	pstConfig->raw16_black_level = ReadSimpleConfig(CONFIG_FILE_NAME, "RAW16_BLACK_LEVEL", 0);
+	pstConfig->raw16_white_level = ReadSimpleConfig(CONFIG_FILE_NAME, "RAW16_WHITE_LEVEL", 65535);
+	pstConfig->raw16_auto_low_clip_permille = ReadSimpleConfig(CONFIG_FILE_NAME, "RAW16_AUTO_LOW_CLIP_PERMILLE", 5);
+	pstConfig->raw16_auto_high_clip_permille = ReadSimpleConfig(CONFIG_FILE_NAME, "RAW16_AUTO_HIGH_CLIP_PERMILLE", 5);
 	pstConfig->queue_depth = ReadSimpleConfig(CONFIG_FILE_NAME, "ENCODER_QUEUE_DEPTH", 3);
 	pstConfig->raw16_little_endian = ReadSimpleConfig(CONFIG_FILE_NAME, "RAW16_LITTLE_ENDIAN", 1) != 0;
 	pstConfig->input_has_img_dma_header = ReadSimpleConfig(CONFIG_FILE_NAME, "INPUT_HAS_IMG_DMA_HEADER", 0) != 0;
@@ -409,6 +414,21 @@ static void LoadEncoderConfig(EncoderPipelineConfig* pstConfig)
 	else
 	{
 		pstConfig->codec = VideoCodec::H265;
+	}
+
+	ReadConfigString(CONFIG_FILE_NAME, "RAW16_MAP_MODE", "shift", acRaw16MapMode, sizeof(acRaw16MapMode));
+	if (strcmp(acRaw16MapMode, "window") == 0 || strcmp(acRaw16MapMode, "WINDOW") == 0)
+	{
+		pstConfig->raw16_mapping_mode = Raw16MappingMode::Window;
+	}
+	else if (strcmp(acRaw16MapMode, "auto_window") == 0 || strcmp(acRaw16MapMode, "AUTO_WINDOW") == 0 ||
+		strcmp(acRaw16MapMode, "auto") == 0 || strcmp(acRaw16MapMode, "AUTO") == 0)
+	{
+		pstConfig->raw16_mapping_mode = Raw16MappingMode::AutoWindow;
+	}
+	else
+	{
+		pstConfig->raw16_mapping_mode = Raw16MappingMode::Shift;
 	}
 
 	ReadConfigString(CONFIG_FILE_NAME, "VIDEO_OUTPUT_PATH",

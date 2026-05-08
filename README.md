@@ -42,7 +42,7 @@ cmake --build build-rk3588
 
 ## Runtime
 
-Copy `rk3588.ini.example` to `rk3588.ini`, then set `FRAME_WIDTH`, `FRAME_HEIGHT`, DMA channel numbers, codec, bitrate, and output path. First validation should use `VIDEO_CODEC=h265`, `OSD_TEST_ENABLE=1`, and a short capture, then play the generated stream:
+Copy `rk3588.ini.example` to `rk3588.ini`, then set `FRAME_WIDTH`, `FRAME_HEIGHT`, DMA channel numbers, codec, bitrate, RAW16 mapping, and output path. Use `RAW16_MAP_MODE=window` with calibrated `RAW16_BLACK_LEVEL` / `RAW16_WHITE_LEVEL`, or `RAW16_MAP_MODE=auto_window`, when preserving grayscale detail matters more than raw speed. First validation should use `VIDEO_CODEC=h265`, `OSD_TEST_ENABLE=1`, and a short capture, then play the generated stream:
 
 ```bash
 ffplay -f hevc /tmp/rk3588_capture.h265

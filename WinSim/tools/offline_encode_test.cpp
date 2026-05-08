@@ -67,7 +67,13 @@ int main(int argc, char** argv)
 	{
 		FillRaw16Gradient(&raw, cfg.width, cfg.height, i);
 		if (!Raw16ToNv12(raw.data(), raw.size(), cfg.width, cfg.height,
-				hor_stride, ver_stride, cfg.raw16_shift, true, &nv12))
+				hor_stride, ver_stride, cfg.raw16_shift, true,
+				cfg.raw16_mapping_mode,
+				cfg.raw16_black_level,
+				cfg.raw16_white_level,
+				cfg.raw16_auto_low_clip_permille,
+				cfg.raw16_auto_high_clip_permille,
+				&nv12))
 		{
 			fprintf(stderr, "RAW16 conversion failed at frame %d\n", i);
 			return 1;
