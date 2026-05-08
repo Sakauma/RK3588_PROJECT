@@ -1,11 +1,13 @@
 # RK3588_PROJECT
 
-RK3588 PCIe RAW16 image stream encoder project. The current application receives DMA payloads from the bundled SDK, assembles RAW16 grayscale frames, converts them to NV12, optionally draws OSD boxes, and sends frames to Rockchip MPP for H.264/H.265 hardware encoding.
+RK3588 RAW16 image stream encoder project. The current application receives image payloads through the bundled PCIe SDK, assembles RAW16 grayscale frames, converts them to NV12, optionally draws OSD boxes, and sends frames to Rockchip MPP for H.264/H.265 hardware encoding.
+
+The transport layer is intentionally treated as a hardware-SDK boundary. Today the input adapter is PCIe/DMA; if the hardware team later provides an SRIO SDK, the algorithm layer should keep using the same payload handoff into `EncoderPipeline::SubmitPacket`.
 
 ## Layout
 
-- `RK3588API/`: vendor PCIe/DMA SDK headers.
-- `WinSim/ConsoleApplication1/`: current DMA test application entrypoint.
+- `RK3588API/`: vendor SDK headers for the current hardware input path.
+- `WinSim/ConsoleApplication1/`: current PCIe/DMA input adapter and application entrypoint.
 - `WinSim/encoder/`: RAW16 frame assembly, preprocessing, OSD, MPP encoder, and pipeline modules.
 - `rk3588.ini.example`: runtime configuration template.
 
@@ -54,7 +56,7 @@ ffplay -f h264 /tmp/rk3588_capture.h264
 
 ## Offline Encoder Test
 
-On the RK3588 target, run the synthetic test before connecting PCIe input:
+On the RK3588 target, run the synthetic test before connecting the hardware SDK input:
 
 ```bash
 ./build-rk3588/offline_encode_test 1920 1080 /tmp/offline_raw16_osd.h265 60
