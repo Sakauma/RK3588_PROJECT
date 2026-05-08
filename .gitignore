@@ -1,0 +1,70 @@
+AGENTS.md
+
+# Build outputs and generated project state
+WinSim/build*/
+build*/
+*.o
+*.obj
+*.exe
+*.ilk
+*.pdb
+*.idb
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+
+# Generated Autotools/cache files from this SDK copy
+WinSim/.deps/
+WinSim/autom4te.cache/
+WinSim/aclocal.m4
+WinSim/autoscan.log
+WinSim/compile
+WinSim/config.guess
+WinSim/config.sub
+WinSim/config.h
+WinSim/config.h.in
+WinSim/config.log
+WinSim/config.status
+WinSim/configure
+WinSim/configure.ac
+WinSim/depcomp
+WinSim/install-sh
+WinSim/install-st
+WinSim/Makefile
+WinSim/Makefile.am
+WinSim/Makefile.in
+WinSim/missing
+WinSim/stamp-h1
+WinSim/AUTHORS
+WinSim/COPYING
+WinSim/ChangeLog
+WinSim/INSTALL
+WinSim/NEWS
+WinSim/README
+WinSim/aarch64-linux-gnu.cmake
+WinSim/b.sh
+WinSim/how.txt
+
+# Legacy local IDE files
+WinSim/ConsoleApplication1/*.sln
+WinSim/ConsoleApplication1/*.vcxproj*
+WinSim/toolchain-arm64.cmakebk
+
+# Generated navigation indexes
+WinSim/tags
+WinSim/file.txt
+WinSim/cscope*
+
+# Local binaries and shipped runtime artifacts
+RK3588Test
+WinSim/RK3588Test
+WinSim/glk200test
+WinSim/test
+libRK3588.so*
+cvgDrv.ko
+
+# Temporary and backup files
+*~
+*.bak
+*.tmp
+*.docx

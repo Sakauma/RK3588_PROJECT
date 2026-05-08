@@ -1,0 +1,27 @@
+# RK3588 PCIe RAW16 encoder configuration
+UP_LOOP_DMA_CHANNUM=5
+DOWN_LOOP_DMA_CHANNUM=4
+
+# Keep callback logs low for real-time capture.
+PRINTF_UP_MAG=0
+
+FRAME_WIDTH=1920
+FRAME_HEIGHT=1080
+VIDEO_CODEC=h265
+FRAME_FPS=30
+VIDEO_BITRATE=8000000
+VIDEO_OUTPUT_PATH=/tmp/rk3588_capture.h265
+
+# RAW16 grayscale conversion: Y = raw16 >> RAW16_SHIFT, UV = 0x80.
+RAW16_SHIFT=8
+RAW16_LITTLE_ENDIAN=1
+INPUT_HAS_IMG_DMA_HEADER=0
+
+# OSD_MODE:
+# auto      - preserve already burned-in OSD and overlay metadata when supplied.
+# burned-in - never draw software OSD.
+OSD_MODE=auto
+OSD_ENABLE=1
+OSD_TEST_ENABLE=0
+
+ENCODER_QUEUE_DEPTH=3
