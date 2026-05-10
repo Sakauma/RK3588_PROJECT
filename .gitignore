@@ -55,13 +55,11 @@ WinSim/tags
 WinSim/file.txt
 WinSim/cscope*
 
-# Local binaries and shipped runtime artifacts
+# Local build outputs
 RK3588Test
 WinSim/RK3588Test
 WinSim/glk200test
 WinSim/test
-libRK3588.so*
-cvgDrv.ko
 
 # Temporary and backup files
 *~

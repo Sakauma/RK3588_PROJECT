@@ -18,10 +18,10 @@
 
 - Rockchip MPP：https://github.com/rockchip-linux/mpp
 - Rockchip librga：https://github.com/airockchip/librga
-- SDK 包中的厂商运行库 `libRK3588.so`
-- 板端驱动 `cvgDrv.ko`
+- 本仓库根目录中的厂商运行库 `libRK3588.so*`
+- 本仓库根目录中的板端驱动 `cvgDrv.ko`
 
-`libRK3588.so*` 和 `cvgDrv.ko` 不提交到 Git。请从 SDK 发布包或目标板环境中取得，并放到可执行文件旁边或系统库/驱动路径中。
+`libRK3588.so*` 和 `cvgDrv.ko` 已随仓库提交，clone 后可直接用于当前 SDK 对应的板端环境。若后续更换板端镜像、内核或厂商 SDK 版本，需要同步替换这些二进制文件。
 
 ## 编译
 
