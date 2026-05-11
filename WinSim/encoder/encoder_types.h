@@ -18,6 +18,12 @@ enum class Raw16MappingMode
 	AutoWindow
 };
 
+enum class InputPixelFormat
+{
+	Raw16,
+	Gray10Le16
+};
+
 struct YuvColor
 {
 	uint8_t y;
@@ -49,9 +55,11 @@ struct EncoderPipelineConfig
 	int raw16_auto_low_clip_permille = 5;
 	int raw16_auto_high_clip_permille = 5;
 	bool raw16_little_endian = true;
+	bool prefer_main10 = false;
 	bool input_has_img_dma_header = false;
 	bool osd_enable = true;
 	bool osd_test_enable = false;
+	InputPixelFormat input_pixel_format = InputPixelFormat::Raw16;
 	Raw16MappingMode raw16_mapping_mode = Raw16MappingMode::Shift;
 	VideoCodec codec = VideoCodec::H265;
 	std::string osd_mode = "auto";
@@ -70,6 +78,7 @@ struct EncoderPipelineStats
 	uint64_t frames_in = 0;
 	uint64_t frames_encoded = 0;
 	uint64_t frames_dropped = 0;
+	uint64_t main10_fallbacks = 0;
 	uint64_t encode_errors = 0;
 };
 

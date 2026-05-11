@@ -48,6 +48,14 @@ bool EncoderPipeline::Start(const EncoderPipelineConfig& config)
 		queue_.clear();
 		latest_osd_.clear();
 		stats_ = EncoderPipelineStats();
+		if (config_.prefer_main10 &&
+			config_.input_pixel_format == InputPixelFormat::Gray10Le16 &&
+			config_.codec == VideoCodec::H265 &&
+			!encoder_.Main10Active())
+		{
+			stats_.main10_fallbacks = 1;
+			last_error_ = encoder_.Main10FallbackReason();
+		}
 	}
 
 	worker_ = std::thread(&EncoderPipeline::WorkerLoop, this);
@@ -161,17 +169,32 @@ void EncoderPipeline::WorkerLoop()
 			queue_.pop_front();
 		}
 
+		int raw16_shift = config_.raw16_shift;
+		int raw16_black_level = config_.raw16_black_level;
+		int raw16_white_level = config_.raw16_white_level;
+		if (config_.input_pixel_format == InputPixelFormat::Gray10Le16)
+		{
+			if (raw16_shift == 8)
+			{
+				raw16_shift = 2;
+			}
+			if (raw16_white_level == 65535)
+			{
+				raw16_white_level = 1023;
+			}
+		}
+
 		const bool converted = Raw16ToNv12(frame.data.data(),
 			frame.data.size(),
 			config_.width,
 			config_.height,
 			hor_stride_,
 			ver_stride_,
-			config_.raw16_shift,
+			raw16_shift,
 			config_.raw16_little_endian,
 			config_.raw16_mapping_mode,
-			config_.raw16_black_level,
-			config_.raw16_white_level,
+			raw16_black_level,
+			raw16_white_level,
 			config_.raw16_auto_low_clip_permille,
 			config_.raw16_auto_high_clip_permille,
 			&nv12);
@@ -180,7 +203,7 @@ void EncoderPipeline::WorkerLoop()
 		{
 			std::lock_guard<std::mutex> lock(mutex_);
 			stats_.encode_errors++;
-			last_error_ = "RAW16 to NV12 conversion failed";
+			last_error_ = "RAW16/gray10le16 to NV12 conversion failed";
 			continue;
 		}
 

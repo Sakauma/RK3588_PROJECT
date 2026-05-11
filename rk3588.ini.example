@@ -12,14 +12,19 @@ FRAME_FPS=30
 VIDEO_BITRATE=8000000
 VIDEO_OUTPUT_PATH=/tmp/rk3588_capture.h265
 
-# RAW16 to 8-bit luma mapping.
+# FPGA sends gray10le16: 10-bit grayscale samples in a 16-bit little-endian container.
+# PREFER_MAIN10 asks for H.265 Main10; the app falls back to 8-bit NV12 preview when MPP cannot accept it.
+INPUT_PIXEL_FORMAT=gray10le16
+PREFER_MAIN10=1
+
+# RAW16/gray10le16 to 8-bit luma preview mapping.
 # shift       - Y = raw16 >> RAW16_SHIFT, fastest.
 # window      - map RAW16_BLACK_LEVEL..RAW16_WHITE_LEVEL to 0..255.
 # auto_window - per-frame histogram stretch, clipping the configured outliers.
 RAW16_MAP_MODE=shift
-RAW16_SHIFT=8
+RAW16_SHIFT=2
 RAW16_BLACK_LEVEL=0
-RAW16_WHITE_LEVEL=65535
+RAW16_WHITE_LEVEL=1023
 RAW16_AUTO_LOW_CLIP_PERMILLE=5
 RAW16_AUTO_HIGH_CLIP_PERMILLE=5
 RAW16_LITTLE_ENDIAN=1

@@ -17,6 +17,8 @@ public:
 	bool EncodeFrame(const uint8_t* nv12, size_t nv12_size, uint64_t pts);
 	void Close();
 	std::string LastError() const;
+	bool Main10Active() const;
+	std::string Main10FallbackReason() const;
 
 private:
 	bool WriteBytes(const void* data, size_t size);
@@ -27,6 +29,8 @@ private:
 	int ver_stride_;
 	FILE* output_;
 	std::string last_error_;
+	bool main10_active_;
+	std::string main10_fallback_reason_;
 
 #ifdef HAVE_RKMPP
 	void* ctx_;

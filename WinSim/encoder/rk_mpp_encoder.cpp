@@ -14,7 +14,8 @@
 RkMppEncoder::RkMppEncoder()
 	: hor_stride_(0),
 	  ver_stride_(0),
-	  output_(NULL)
+	  output_(NULL),
+	  main10_active_(false)
 #ifdef HAVE_RKMPP
 	  ,
 	  ctx_(NULL),
@@ -35,6 +36,16 @@ std::string RkMppEncoder::LastError() const
 	return last_error_;
 }
 
+bool RkMppEncoder::Main10Active() const
+{
+	return main10_active_;
+}
+
+std::string RkMppEncoder::Main10FallbackReason() const
+{
+	return main10_fallback_reason_;
+}
+
 bool RkMppEncoder::WriteBytes(const void* data, size_t size)
 {
 	if (output_ == NULL || data == NULL || size == 0)
@@ -50,6 +61,8 @@ bool RkMppEncoder::Open(const EncoderPipelineConfig& config, int hor_stride, int
 	config_ = config;
 	hor_stride_ = hor_stride;
 	ver_stride_ = ver_stride;
+	main10_active_ = false;
+	main10_fallback_reason_.clear();
 
 	output_ = fopen(config_.output_path.c_str(), "wb");
 	if (output_ == NULL)
@@ -69,6 +82,14 @@ bool RkMppEncoder::Open(const EncoderPipelineConfig& config, int hor_stride, int
 	MppBufferGroup group = NULL;
 	MppCodingType coding = (config_.codec == VideoCodec::H264) ?
 		MPP_VIDEO_CodingAVC : MPP_VIDEO_CodingHEVC;
+	const bool request_main10 = config_.prefer_main10 &&
+		config_.input_pixel_format == InputPixelFormat::Gray10Le16 &&
+		config_.codec == VideoCodec::H265;
+	if (request_main10)
+	{
+		main10_fallback_reason_ =
+			"MPP Main10 encoder input was requested, but this build uses NV12 input; falling back to 8-bit H.265 preview";
+	}
 
 	MPP_RET ret = mpp_create(&ctx, &mpi);
 	if (ret != MPP_OK)
@@ -276,6 +297,7 @@ bool RkMppEncoder::EncodeFrame(const uint8_t* nv12, size_t nv12_size, uint64_t p
 
 void RkMppEncoder::Close()
 {
+	main10_active_ = false;
 #ifdef HAVE_RKMPP
 	if (cfg_ != NULL)
 	{

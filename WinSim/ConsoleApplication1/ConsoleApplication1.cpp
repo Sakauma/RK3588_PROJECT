@@ -383,6 +383,7 @@ static void LoadEncoderConfig(EncoderPipelineConfig* pstConfig)
 	char acOutput[MAX_FILE_PATH_LEN];
 	char acOsdMode[32];
 	char acRaw16MapMode[32];
+	char acInputPixelFormat[32];
 
 	if (pstConfig == NULL)
 	{
@@ -400,6 +401,7 @@ static void LoadEncoderConfig(EncoderPipelineConfig* pstConfig)
 	pstConfig->raw16_auto_high_clip_permille = ReadSimpleConfig(CONFIG_FILE_NAME, "RAW16_AUTO_HIGH_CLIP_PERMILLE", 5);
 	pstConfig->queue_depth = ReadSimpleConfig(CONFIG_FILE_NAME, "ENCODER_QUEUE_DEPTH", 3);
 	pstConfig->raw16_little_endian = ReadSimpleConfig(CONFIG_FILE_NAME, "RAW16_LITTLE_ENDIAN", 1) != 0;
+	pstConfig->prefer_main10 = ReadSimpleConfig(CONFIG_FILE_NAME, "PREFER_MAIN10", 0) != 0;
 	pstConfig->input_has_img_dma_header = ReadSimpleConfig(CONFIG_FILE_NAME, "INPUT_HAS_IMG_DMA_HEADER", 0) != 0;
 	pstConfig->osd_enable = ReadSimpleConfig(CONFIG_FILE_NAME, "OSD_ENABLE", 1) != 0;
 	pstConfig->osd_test_enable = ReadSimpleConfig(CONFIG_FILE_NAME, "OSD_TEST_ENABLE", 0) != 0;
@@ -414,6 +416,17 @@ static void LoadEncoderConfig(EncoderPipelineConfig* pstConfig)
 	else
 	{
 		pstConfig->codec = VideoCodec::H265;
+	}
+
+	ReadConfigString(CONFIG_FILE_NAME, "INPUT_PIXEL_FORMAT", "raw16", acInputPixelFormat, sizeof(acInputPixelFormat));
+	if (strcmp(acInputPixelFormat, "gray10le16") == 0 || strcmp(acInputPixelFormat, "GRAY10LE16") == 0 ||
+		strcmp(acInputPixelFormat, "gray10") == 0 || strcmp(acInputPixelFormat, "GRAY10") == 0)
+	{
+		pstConfig->input_pixel_format = InputPixelFormat::Gray10Le16;
+	}
+	else
+	{
+		pstConfig->input_pixel_format = InputPixelFormat::Raw16;
 	}
 
 	ReadConfigString(CONFIG_FILE_NAME, "RAW16_MAP_MODE", "shift", acRaw16MapMode, sizeof(acRaw16MapMode));
@@ -744,13 +757,14 @@ static void ChannelRecvDataCallBack(OS_HANDLE pChHandle,
 	if (g_bPrintMsg)
 	{
 		EncoderPipelineStats stStats = g_stEncoderPipeline.GetStats();
-		os_printf("DMA包已提交: chan=%d, payload=%u, packets=%llu, frames=%llu, encoded=%llu, drop=%llu\n",
+		os_printf("DMA包已提交: chan=%d, payload=%u, packets=%llu, frames=%llu, encoded=%llu, drop=%llu, main10_fallbacks=%llu\n",
 			dmaChan,
 			uPayloadLen,
 			(unsigned long long)stStats.packets,
 			(unsigned long long)stStats.frames_in,
 			(unsigned long long)stStats.frames_encoded,
-			(unsigned long long)stStats.frames_dropped);
+			(unsigned long long)stStats.frames_dropped,
+			(unsigned long long)stStats.main10_fallbacks);
 	}
 #endif
 }
@@ -787,12 +801,14 @@ int main(void)
 
 	printf("从配置文件读取通道号: 上行=%d, 下行=%d\n", nUpChannel, nDownChannel);
 	LoadEncoderConfig(&g_stEncoderConfig);
-	printf("编码配置: %dx%d fps=%d bitrate=%d codec=%s output=%s osd=%s\n",
+	printf("编码配置: %dx%d fps=%d bitrate=%d codec=%s input=%s main10=%s output=%s osd=%s\n",
 		g_stEncoderConfig.width,
 		g_stEncoderConfig.height,
 		g_stEncoderConfig.fps,
 		g_stEncoderConfig.bitrate,
 		g_stEncoderConfig.codec == VideoCodec::H264 ? "h264" : "h265",
+		g_stEncoderConfig.input_pixel_format == InputPixelFormat::Gray10Le16 ? "gray10le16" : "raw16",
+		g_stEncoderConfig.prefer_main10 ? "prefer" : "off",
 		g_stEncoderConfig.output_path.c_str(),
 		g_stEncoderConfig.osd_enable ? "on" : "off");
 
@@ -923,11 +939,12 @@ int main(void)
 			g_uCorrectPackets + g_uErrorPackets, g_uCorrectPackets, g_uErrorPackets);
 		{
 			EncoderPipelineStats stStats = g_stEncoderPipeline.GetStats();
-			os_printf("编码统计: packets=%llu frames_in=%llu encoded=%llu dropped=%llu errors=%llu\n",
+			os_printf("编码统计: packets=%llu frames_in=%llu encoded=%llu dropped=%llu main10_fallbacks=%llu errors=%llu\n",
 				(unsigned long long)stStats.packets,
 				(unsigned long long)stStats.frames_in,
 				(unsigned long long)stStats.frames_encoded,
 				(unsigned long long)stStats.frames_dropped,
+				(unsigned long long)stStats.main10_fallbacks,
 				(unsigned long long)stStats.encode_errors);
 		}
 
@@ -943,9 +960,10 @@ int main(void)
 	os_sleepms(100);
 	{
 		EncoderPipelineStats stStats = g_stEncoderPipeline.GetStats();
-		os_printf("exit, encoded=%llu dropped=%llu errors=%llu output=%s\n",
+		os_printf("exit, encoded=%llu dropped=%llu main10_fallbacks=%llu errors=%llu output=%s\n",
 			(unsigned long long)stStats.frames_encoded,
 			(unsigned long long)stStats.frames_dropped,
+			(unsigned long long)stStats.main10_fallbacks,
 			(unsigned long long)stStats.encode_errors,
 			g_stEncoderConfig.output_path.c_str());
 	}
