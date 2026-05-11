@@ -377,6 +377,50 @@ static int ReadConfigString(const char* pcFilename, const char* pcKey,
 	return nResult;
 }
 
+static const char* InputPixelFormatName(InputPixelFormat eFormat)
+{
+	switch (eFormat)
+	{
+	case InputPixelFormat::Gray10Le16:
+		return "gray10le16";
+	case InputPixelFormat::Nv12:
+		return "nv12";
+	case InputPixelFormat::Raw16:
+	default:
+		return "raw16";
+	}
+}
+
+static InputPixelFormat ParseInputPixelFormat(const char* pcFormat)
+{
+	if (pcFormat != NULL &&
+		(strcmp(pcFormat, "gray10le16") == 0 || strcmp(pcFormat, "GRAY10LE16") == 0 ||
+			strcmp(pcFormat, "gray10") == 0 || strcmp(pcFormat, "GRAY10") == 0))
+	{
+		return InputPixelFormat::Gray10Le16;
+	}
+	if (pcFormat != NULL &&
+		(strcmp(pcFormat, "nv12") == 0 || strcmp(pcFormat, "NV12") == 0 ||
+			strcmp(pcFormat, "yuv420sp") == 0 || strcmp(pcFormat, "YUV420SP") == 0))
+	{
+		return InputPixelFormat::Nv12;
+	}
+	return InputPixelFormat::Raw16;
+}
+
+static const char* EncoderOsdStatus(const EncoderPipelineConfig* pstConfig)
+{
+	if (pstConfig == NULL)
+	{
+		return "unknown";
+	}
+	if (!pstConfig->osd_enable || pstConfig->osd_mode == "burned-in")
+	{
+		return "fpga/burned-in";
+	}
+	return "software";
+}
+
 static void LoadEncoderConfig(EncoderPipelineConfig* pstConfig)
 {
 	char acCodec[32];
@@ -394,16 +438,21 @@ static void LoadEncoderConfig(EncoderPipelineConfig* pstConfig)
 	pstConfig->height = ReadSimpleConfig(CONFIG_FILE_NAME, "FRAME_HEIGHT", 1080);
 	pstConfig->fps = ReadSimpleConfig(CONFIG_FILE_NAME, "FRAME_FPS", 30);
 	pstConfig->bitrate = ReadSimpleConfig(CONFIG_FILE_NAME, "VIDEO_BITRATE", 8000000);
-	pstConfig->raw16_shift = ReadSimpleConfig(CONFIG_FILE_NAME, "RAW16_SHIFT", 8);
+
+	ReadConfigString(CONFIG_FILE_NAME, "INPUT_PIXEL_FORMAT", "gray10le16", acInputPixelFormat, sizeof(acInputPixelFormat));
+	pstConfig->input_pixel_format = ParseInputPixelFormat(acInputPixelFormat);
+
+	const bool bRaw16Input = pstConfig->input_pixel_format == InputPixelFormat::Raw16;
+	pstConfig->raw16_shift = ReadSimpleConfig(CONFIG_FILE_NAME, "RAW16_SHIFT", bRaw16Input ? 8 : 2);
 	pstConfig->raw16_black_level = ReadSimpleConfig(CONFIG_FILE_NAME, "RAW16_BLACK_LEVEL", 0);
-	pstConfig->raw16_white_level = ReadSimpleConfig(CONFIG_FILE_NAME, "RAW16_WHITE_LEVEL", 65535);
+	pstConfig->raw16_white_level = ReadSimpleConfig(CONFIG_FILE_NAME, "RAW16_WHITE_LEVEL", bRaw16Input ? 65535 : 1023);
 	pstConfig->raw16_auto_low_clip_permille = ReadSimpleConfig(CONFIG_FILE_NAME, "RAW16_AUTO_LOW_CLIP_PERMILLE", 5);
 	pstConfig->raw16_auto_high_clip_permille = ReadSimpleConfig(CONFIG_FILE_NAME, "RAW16_AUTO_HIGH_CLIP_PERMILLE", 5);
 	pstConfig->queue_depth = ReadSimpleConfig(CONFIG_FILE_NAME, "ENCODER_QUEUE_DEPTH", 3);
 	pstConfig->raw16_little_endian = ReadSimpleConfig(CONFIG_FILE_NAME, "RAW16_LITTLE_ENDIAN", 1) != 0;
 	pstConfig->prefer_main10 = ReadSimpleConfig(CONFIG_FILE_NAME, "PREFER_MAIN10", 0) != 0;
 	pstConfig->input_has_img_dma_header = ReadSimpleConfig(CONFIG_FILE_NAME, "INPUT_HAS_IMG_DMA_HEADER", 0) != 0;
-	pstConfig->osd_enable = ReadSimpleConfig(CONFIG_FILE_NAME, "OSD_ENABLE", 1) != 0;
+	pstConfig->osd_enable = ReadSimpleConfig(CONFIG_FILE_NAME, "OSD_ENABLE", 0) != 0;
 	pstConfig->osd_test_enable = ReadSimpleConfig(CONFIG_FILE_NAME, "OSD_TEST_ENABLE", 0) != 0;
 	g_bPrintMsg = ReadSimpleConfig(CONFIG_FILE_NAME, "PRINTF_UP_MAG", 0) != 0;
 
@@ -418,18 +467,7 @@ static void LoadEncoderConfig(EncoderPipelineConfig* pstConfig)
 		pstConfig->codec = VideoCodec::H265;
 	}
 
-	ReadConfigString(CONFIG_FILE_NAME, "INPUT_PIXEL_FORMAT", "raw16", acInputPixelFormat, sizeof(acInputPixelFormat));
-	if (strcmp(acInputPixelFormat, "gray10le16") == 0 || strcmp(acInputPixelFormat, "GRAY10LE16") == 0 ||
-		strcmp(acInputPixelFormat, "gray10") == 0 || strcmp(acInputPixelFormat, "GRAY10") == 0)
-	{
-		pstConfig->input_pixel_format = InputPixelFormat::Gray10Le16;
-	}
-	else
-	{
-		pstConfig->input_pixel_format = InputPixelFormat::Raw16;
-	}
-
-	ReadConfigString(CONFIG_FILE_NAME, "RAW16_MAP_MODE", "shift", acRaw16MapMode, sizeof(acRaw16MapMode));
+	ReadConfigString(CONFIG_FILE_NAME, "RAW16_MAP_MODE", bRaw16Input ? "shift" : "window", acRaw16MapMode, sizeof(acRaw16MapMode));
 	if (strcmp(acRaw16MapMode, "window") == 0 || strcmp(acRaw16MapMode, "WINDOW") == 0)
 	{
 		pstConfig->raw16_mapping_mode = Raw16MappingMode::Window;
@@ -448,7 +486,7 @@ static void LoadEncoderConfig(EncoderPipelineConfig* pstConfig)
 		"/tmp/rk3588_capture.h265", acOutput, sizeof(acOutput));
 	pstConfig->output_path = acOutput;
 
-	ReadConfigString(CONFIG_FILE_NAME, "OSD_MODE", "auto", acOsdMode, sizeof(acOsdMode));
+	ReadConfigString(CONFIG_FILE_NAME, "OSD_MODE", "burned-in", acOsdMode, sizeof(acOsdMode));
 	pstConfig->osd_mode = acOsdMode;
 }
 
@@ -807,10 +845,10 @@ int main(void)
 		g_stEncoderConfig.fps,
 		g_stEncoderConfig.bitrate,
 		g_stEncoderConfig.codec == VideoCodec::H264 ? "h264" : "h265",
-		g_stEncoderConfig.input_pixel_format == InputPixelFormat::Gray10Le16 ? "gray10le16" : "raw16",
+		InputPixelFormatName(g_stEncoderConfig.input_pixel_format),
 		g_stEncoderConfig.prefer_main10 ? "prefer" : "off",
 		g_stEncoderConfig.output_path.c_str(),
-		g_stEncoderConfig.osd_enable ? "on" : "off");
+		EncoderOsdStatus(&g_stEncoderConfig));
 
 	/* 验证通道号有效性 */
 	if (nUpChannel < 0 || nUpChannel > MAX_DEV_UP_DMA_CHL)
@@ -865,6 +903,13 @@ int main(void)
 		return -1;
 	}
 	g_bEncoderStarted = true;
+	{
+		EncoderPipelineStats stStats = g_stEncoderPipeline.GetStats();
+		if (stStats.main10_fallbacks > 0)
+		{
+			printf("警告: %s\n", g_stEncoderPipeline.LastError().c_str());
+		}
+	}
 
 	cvg_pro_start(ch, 0);
 

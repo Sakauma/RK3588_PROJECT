@@ -23,15 +23,20 @@ struct ImgDmaHeaderCompat
 FrameAssembler::FrameAssembler()
 	: width_(0),
 	  height_(0),
+	  input_pixel_format_(InputPixelFormat::Gray10Le16),
 	  input_has_img_dma_header_(false),
 	  next_sequence_(0)
 {
 }
 
-void FrameAssembler::Configure(int width, int height, bool input_has_img_dma_header)
+void FrameAssembler::Configure(int width,
+	int height,
+	InputPixelFormat input_pixel_format,
+	bool input_has_img_dma_header)
 {
 	width_ = width;
 	height_ = height;
+	input_pixel_format_ = input_pixel_format;
 	input_has_img_dma_header_ = input_has_img_dma_header;
 	Reset();
 }
@@ -48,7 +53,14 @@ size_t FrameAssembler::FrameBytes() const
 	{
 		return 0;
 	}
-	return static_cast<size_t>(width_) * static_cast<size_t>(height_) * 2U;
+
+	const size_t pixel_count = static_cast<size_t>(width_) * static_cast<size_t>(height_);
+	if (input_pixel_format_ == InputPixelFormat::Nv12)
+	{
+		return pixel_count * 3U / 2U;
+	}
+
+	return pixel_count * 2U;
 }
 
 bool FrameAssembler::PushPacket(const uint8_t* payload, size_t payload_size, RawFrame* out_frame)

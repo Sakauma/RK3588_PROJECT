@@ -1,4 +1,4 @@
-# WinSim/CMakeLists.txt - RK3588 RAW16 encoder test application
+# WinSim/CMakeLists.txt - RK3588 FPGA-preprocessed video encoder application
 
 cmake_minimum_required(VERSION 3.10)
 project(RK3588Test VERSION 1.0.0 LANGUAGES C CXX)
@@ -9,7 +9,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 option(ENABLE_RKMPP "Enable Rockchip MPP hardware encoder support" ON)
 option(ENABLE_RGA "Search for Rockchip librga for future accelerated preprocessing" ON)
-option(BUILD_OFFLINE_ENCODER_TEST "Build synthetic RAW16-to-MPP encoder test" ON)
+option(BUILD_OFFLINE_ENCODER_TEST "Build synthetic gray10le16/NV12-to-MPP encoder test" ON)
+option(BUILD_FRAME_ASSEMBLER_SMOKE_TEST "Build PCIe packet-to-frame assembler smoke test" ON)
 
 if(CMAKE_CROSSCOMPILING)
     message(STATUS "Cross compiling for ${CMAKE_SYSTEM_PROCESSOR}")
@@ -106,7 +107,7 @@ if(ENABLE_RGA)
         message(STATUS "Rockchip RGA include: ${RGA_INCLUDE_DIR}")
         message(STATUS "Rockchip RGA library: ${RGA_LIBRARY}")
     else()
-        message(STATUS "Rockchip RGA not found; CPU RAW16 preprocessing will be used")
+        message(STATUS "Rockchip RGA not found; CPU grayscale/NV12 input preparation will be used")
     endif()
 endif()
 
@@ -126,4 +127,15 @@ if(BUILD_OFFLINE_ENCODER_TEST)
         target_include_directories(offline_encode_test PRIVATE "${MPP_INCLUDE_DIR}")
         target_link_libraries(offline_encode_test PRIVATE "${MPP_LIBRARY}")
     endif()
+endif()
+
+if(BUILD_FRAME_ASSEMBLER_SMOKE_TEST)
+    add_executable(frame_assembler_smoke_test
+        tools/frame_assembler_smoke_test.cpp
+        encoder/frame_assembler.cpp
+    )
+    target_include_directories(frame_assembler_smoke_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/encoder
+    )
 endif()

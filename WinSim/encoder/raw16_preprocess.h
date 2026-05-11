@@ -22,5 +22,12 @@ bool Raw16ToNv12(const uint8_t* raw,
 	int auto_low_clip_permille,
 	int auto_high_clip_permille,
 	std::vector<uint8_t>* nv12);
+bool PackedNv12ToMppNv12(const uint8_t* packed_nv12,
+	size_t packed_nv12_size,
+	int width,
+	int height,
+	int hor_stride,
+	int ver_stride,
+	std::vector<uint8_t>* nv12);
 
 #endif

@@ -1,4 +1,4 @@
-# RK3588 PCIe RAW16 encoder configuration
+# RK3588 PCIe FPGA-preprocessed video encoder configuration
 UP_LOOP_DMA_CHANNUM=5
 DOWN_LOOP_DMA_CHANNUM=4
 
@@ -13,15 +13,15 @@ VIDEO_BITRATE=8000000
 VIDEO_OUTPUT_PATH=/tmp/rk3588_capture.h265
 
 # FPGA sends gray10le16: 10-bit grayscale samples in a 16-bit little-endian container.
-# PREFER_MAIN10 asks for H.265 Main10; the app falls back to 8-bit NV12 preview when MPP cannot accept it.
+# OSD and 16-bit to 10-bit conversion are completed in FPGA before PCIe transfer.
 INPUT_PIXEL_FORMAT=gray10le16
-PREFER_MAIN10=1
+PREFER_MAIN10=0
 
-# RAW16/gray10le16 to 8-bit luma preview mapping.
+# gray10le16 to 8-bit NV12 encoder input mapping.
 # shift       - Y = raw16 >> RAW16_SHIFT, fastest.
 # window      - map RAW16_BLACK_LEVEL..RAW16_WHITE_LEVEL to 0..255.
 # auto_window - per-frame histogram stretch, clipping the configured outliers.
-RAW16_MAP_MODE=shift
+RAW16_MAP_MODE=window
 RAW16_SHIFT=2
 RAW16_BLACK_LEVEL=0
 RAW16_WHITE_LEVEL=1023
@@ -31,10 +31,10 @@ RAW16_LITTLE_ENDIAN=1
 INPUT_HAS_IMG_DMA_HEADER=0
 
 # OSD_MODE:
-# auto      - preserve already burned-in OSD and overlay metadata when supplied.
-# burned-in - never draw software OSD.
-OSD_MODE=auto
-OSD_ENABLE=1
+# burned-in - OSD is already present in FPGA output; never draw software OSD.
+# auto      - legacy/software fallback mode when external metadata is supplied.
+OSD_MODE=burned-in
+OSD_ENABLE=0
 OSD_TEST_ENABLE=0
 
 ENCODER_QUEUE_DEPTH=3

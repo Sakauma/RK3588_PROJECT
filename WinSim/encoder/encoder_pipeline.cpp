@@ -33,7 +33,10 @@ bool EncoderPipeline::Start(const EncoderPipelineConfig& config)
 	config_ = config;
 	hor_stride_ = AlignUp(config_.width, 16);
 	ver_stride_ = AlignUp(config_.height, 16);
-	assembler_.Configure(config_.width, config_.height, config_.input_has_img_dma_header);
+	assembler_.Configure(config_.width,
+		config_.height,
+		config_.input_pixel_format,
+		config_.input_has_img_dma_header);
 
 	if (!encoder_.Open(config_, hor_stride_, ver_stride_))
 	{
@@ -184,26 +187,40 @@ void EncoderPipeline::WorkerLoop()
 			}
 		}
 
-		const bool converted = Raw16ToNv12(frame.data.data(),
-			frame.data.size(),
-			config_.width,
-			config_.height,
-			hor_stride_,
-			ver_stride_,
-			raw16_shift,
-			config_.raw16_little_endian,
-			config_.raw16_mapping_mode,
-			raw16_black_level,
-			raw16_white_level,
-			config_.raw16_auto_low_clip_permille,
-			config_.raw16_auto_high_clip_permille,
-			&nv12);
+		bool prepared = false;
+		if (config_.input_pixel_format == InputPixelFormat::Nv12)
+		{
+			prepared = PackedNv12ToMppNv12(frame.data.data(),
+				frame.data.size(),
+				config_.width,
+				config_.height,
+				hor_stride_,
+				ver_stride_,
+				&nv12);
+		}
+		else
+		{
+			prepared = Raw16ToNv12(frame.data.data(),
+				frame.data.size(),
+				config_.width,
+				config_.height,
+				hor_stride_,
+				ver_stride_,
+				raw16_shift,
+				config_.raw16_little_endian,
+				config_.raw16_mapping_mode,
+				raw16_black_level,
+				raw16_white_level,
+				config_.raw16_auto_low_clip_permille,
+				config_.raw16_auto_high_clip_permille,
+				&nv12);
+		}
 
-		if (!converted)
+		if (!prepared)
 		{
 			std::lock_guard<std::mutex> lock(mutex_);
 			stats_.encode_errors++;
-			last_error_ = "RAW16/gray10le16 to NV12 conversion failed";
+			last_error_ = "encoder input preparation to NV12 failed";
 			continue;
 		}
 

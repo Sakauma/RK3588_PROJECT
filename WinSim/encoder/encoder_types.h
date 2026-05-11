@@ -21,7 +21,8 @@ enum class Raw16MappingMode
 enum class InputPixelFormat
 {
 	Raw16,
-	Gray10Le16
+	Gray10Le16,
+	Nv12
 };
 
 struct YuvColor
@@ -49,20 +50,20 @@ struct EncoderPipelineConfig
 	int fps = 30;
 	int bitrate = 8000000;
 	int queue_depth = 3;
-	int raw16_shift = 8;
+	int raw16_shift = 2;
 	int raw16_black_level = 0;
-	int raw16_white_level = 65535;
+	int raw16_white_level = 1023;
 	int raw16_auto_low_clip_permille = 5;
 	int raw16_auto_high_clip_permille = 5;
 	bool raw16_little_endian = true;
 	bool prefer_main10 = false;
 	bool input_has_img_dma_header = false;
-	bool osd_enable = true;
+	bool osd_enable = false;
 	bool osd_test_enable = false;
-	InputPixelFormat input_pixel_format = InputPixelFormat::Raw16;
-	Raw16MappingMode raw16_mapping_mode = Raw16MappingMode::Shift;
+	InputPixelFormat input_pixel_format = InputPixelFormat::Gray10Le16;
+	Raw16MappingMode raw16_mapping_mode = Raw16MappingMode::Window;
 	VideoCodec codec = VideoCodec::H265;
-	std::string osd_mode = "auto";
+	std::string osd_mode = "burned-in";
 	std::string output_path = "/tmp/rk3588_capture.h265";
 };
 

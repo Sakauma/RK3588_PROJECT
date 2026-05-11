@@ -174,3 +174,47 @@ bool Raw16ToNv12(const uint8_t* raw,
 
 	return true;
 }
+
+bool PackedNv12ToMppNv12(const uint8_t* packed_nv12,
+	size_t packed_nv12_size,
+	int width,
+	int height,
+	int hor_stride,
+	int ver_stride,
+	std::vector<uint8_t>* nv12)
+{
+	const size_t pixel_count = static_cast<size_t>(width) * static_cast<size_t>(height);
+	const size_t packed_size = pixel_count * 3U / 2U;
+	const size_t y_size = static_cast<size_t>(hor_stride) * static_cast<size_t>(ver_stride);
+	const size_t uv_size = y_size / 2U;
+
+	if (packed_nv12 == NULL || nv12 == NULL || width <= 0 || height <= 0 ||
+		hor_stride < width || ver_stride < height || packed_nv12_size < packed_size)
+	{
+		return false;
+	}
+
+	nv12->assign(y_size + uv_size, 0x80);
+
+	uint8_t* y_plane = nv12->data();
+	uint8_t* uv_plane = y_plane + y_size;
+	const uint8_t* src_y = packed_nv12;
+	const uint8_t* src_uv = packed_nv12 + pixel_count;
+	const int uv_height = height / 2;
+
+	for (int row = 0; row < height; ++row)
+	{
+		memcpy(y_plane + static_cast<size_t>(row) * static_cast<size_t>(hor_stride),
+			src_y + static_cast<size_t>(row) * static_cast<size_t>(width),
+			static_cast<size_t>(width));
+	}
+
+	for (int row = 0; row < uv_height; ++row)
+	{
+		memcpy(uv_plane + static_cast<size_t>(row) * static_cast<size_t>(hor_stride),
+			src_uv + static_cast<size_t>(row) * static_cast<size_t>(width),
+			static_cast<size_t>(width));
+	}
+
+	return true;
+}
