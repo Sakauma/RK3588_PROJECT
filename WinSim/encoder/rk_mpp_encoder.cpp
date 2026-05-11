@@ -1,6 +1,7 @@
 #include "rk_mpp_encoder.h"
 
 #include <string.h>
+#include <vector>
 
 #ifdef HAVE_RKMPP
 #include "rk_mpi.h"
@@ -152,13 +153,14 @@ bool RkMppEncoder::WriteHeader()
 	MppCtx ctx = static_cast<MppCtx>(ctx_);
 	MppApi* mpi = static_cast<MppApi*>(mpi_);
 	MppPacket packet = NULL;
+	std::vector<uint8_t> header_buffer(64U * 1024U);
 
 	if (config_.codec != VideoCodec::H264 && config_.codec != VideoCodec::H265)
 	{
 		return true;
 	}
 
-	if (mpp_packet_init(&packet, NULL, 0) != MPP_OK)
+	if (mpp_packet_init(&packet, header_buffer.data(), header_buffer.size()) != MPP_OK)
 	{
 		last_error_ = "mpp_packet_init header failed";
 		return false;
