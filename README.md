@@ -11,6 +11,7 @@
 - `WinSim/encoder/`：RAW16 组帧、预处理、OSD、MPP 编码和管线模块。
 - `docs/DEVELOPMENT_GUIDE.md`：RAW16 编码、OSD 和后续 SRIO 对接开发指南。
 - `docs/RK3588_DEBUG_GUIDE.md`：Win11 通过串口/SSH 调试 RK3588 的完整上板步骤。
+- `docs/MOBAXTERM_RK3588_GUIDE.md`：使用 MobaXterm 连接、传输文件和调试 RK3588 的分步指南。
 - `rk3588.ini.example`：运行时配置模板。
 
 ## 依赖
