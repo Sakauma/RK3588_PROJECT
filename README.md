@@ -10,6 +10,7 @@
 - `WinSim/ConsoleApplication1/`：PCIe/DMA 输入适配和程序入口。
 - `WinSim/encoder/`：RAW16 组帧、预处理、OSD、MPP 编码和管线模块。
 - `docs/DEVELOPMENT_GUIDE.md`：RAW16 编码、OSD 和后续 SRIO 对接开发指南。
+- `docs/RK3588_DEBUG_GUIDE.md`：Win11 通过串口/SSH 调试 RK3588 的完整上板步骤。
 - `rk3588.ini.example`：运行时配置模板。
 
 ## 依赖
