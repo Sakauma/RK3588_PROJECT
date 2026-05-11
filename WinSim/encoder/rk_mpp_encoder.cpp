@@ -7,7 +7,7 @@
 #include "mpp_buffer.h"
 #include "mpp_frame.h"
 #include "mpp_packet.h"
-#include "mpp_enc_cfg.h"
+#include "rk_venc_cfg.h"
 #endif
 
 RkMppEncoder::RkMppEncoder()
