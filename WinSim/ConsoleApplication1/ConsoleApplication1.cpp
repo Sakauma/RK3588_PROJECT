@@ -25,6 +25,16 @@ Modification: 增加YUV文件保存功能，每个报文独立保存
 #include <signal.h>
 #include <time.h>
 #include <sys/stat.h>
+#include <stdint.h>
+#include <errno.h>
+#include <vector>
+#include <string>
+#include <algorithm>
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <dirent.h>
+#endif
 #include "../../RK3588API/include/ApiBase.h"
 #include "../../RK3588API/include/ApiExt.h"
 #include "../../RK3588API/glkconfig.h"
@@ -41,6 +51,8 @@ Modification: 增加YUV文件保存功能，每个报文独立保存
 #define DOWN_LOOP_DMA_CHANNUM  (2)     /* 自回环下行DMA */
 #define CONFIG_FILE_NAME       "rk3588.ini"  /* 配置文件名称 */
 #define MAX_CHANNEL_NUM        (31)    /* 最大通道号限制 */
+#define PSEUDO_FRAME_HEADER_SIZE 64
+#define DEFAULT_PSEUDO_FRAME_DIR "/root/RK3588_PROJECT/pseudo_frames"
 
 /* YUV保存相关宏定义 */
 #define DEFAULT_SAVE_PATH      "/tmp/pcie_yuv/"
@@ -57,6 +69,19 @@ static unsigned int g_uErrorPackets = 0;     /* 错误包数量 */
 static EncoderPipeline g_stEncoderPipeline;
 static EncoderPipelineConfig g_stEncoderConfig;
 static bool g_bEncoderStarted = false;
+
+typedef struct PseudoVideoConfig
+{
+	bool enable;
+	bool loop;
+	int width;
+	int height;
+	int packet_bytes;
+	int raw10_shift;
+	int frame_interval_ms;
+	int max_frames;
+	char frame_dir[MAX_FILE_PATH_LEN];
+} PseudoVideoConfig;
 
 /*************************************************
 Function:       CreateSaveDirectory
@@ -490,6 +515,357 @@ static void LoadEncoderConfig(EncoderPipelineConfig* pstConfig)
 	pstConfig->osd_mode = acOsdMode;
 }
 
+static void LoadPseudoVideoConfig(PseudoVideoConfig* pstConfig, const EncoderPipelineConfig* pstEncoderConfig)
+{
+	if (pstConfig == NULL)
+	{
+		return;
+	}
+
+	memset(pstConfig, 0, sizeof(*pstConfig));
+	pstConfig->enable = ReadSimpleConfig(CONFIG_FILE_NAME, "PSEUDO_SEND_ENABLE", 0) != 0;
+	pstConfig->loop = ReadSimpleConfig(CONFIG_FILE_NAME, "PSEUDO_LOOP", 1) != 0;
+	pstConfig->width = ReadSimpleConfig(CONFIG_FILE_NAME, "PSEUDO_FRAME_WIDTH",
+		pstEncoderConfig != NULL ? pstEncoderConfig->width : 2048);
+	pstConfig->height = ReadSimpleConfig(CONFIG_FILE_NAME, "PSEUDO_FRAME_HEIGHT",
+		pstEncoderConfig != NULL ? pstEncoderConfig->height : 2048);
+	pstConfig->packet_bytes = ReadSimpleConfig(CONFIG_FILE_NAME, "PSEUDO_PACKET_BYTES", 4096);
+	pstConfig->raw10_shift = ReadSimpleConfig(CONFIG_FILE_NAME, "PSEUDO_RAW10_SHIFT", 6);
+	pstConfig->frame_interval_ms = ReadSimpleConfig(CONFIG_FILE_NAME, "PSEUDO_FRAME_INTERVAL_MS", 0);
+	pstConfig->max_frames = ReadSimpleConfig(CONFIG_FILE_NAME, "PSEUDO_MAX_FRAMES", 0);
+	ReadConfigString(CONFIG_FILE_NAME, "PSEUDO_FRAME_DIR",
+		DEFAULT_PSEUDO_FRAME_DIR, pstConfig->frame_dir, sizeof(pstConfig->frame_dir));
+
+	if (pstConfig->packet_bytes <= 0)
+	{
+		pstConfig->packet_bytes = 4096;
+	}
+	if (pstConfig->packet_bytes > (4 * 1024 * 1024))
+	{
+		pstConfig->packet_bytes = 4096;
+	}
+}
+
+static void WriteLe32(unsigned char* p, uint32_t value)
+{
+	p[0] = (unsigned char)(value & 0xff);
+	p[1] = (unsigned char)((value >> 8) & 0xff);
+	p[2] = (unsigned char)((value >> 16) & 0xff);
+	p[3] = (unsigned char)((value >> 24) & 0xff);
+}
+
+static void WriteLe64(unsigned char* p, uint64_t value)
+{
+	WriteLe32(p, (uint32_t)(value & 0xffffffffu));
+	WriteLe32(p + 4, (uint32_t)((value >> 32) & 0xffffffffu));
+}
+
+static void BuildPseudoFrameHeader(unsigned char* pHeader,
+	const PseudoVideoConfig* pstConfig,
+	uint64_t ullFrameId,
+	uint64_t ullFrameBytes)
+{
+	memset(pHeader, 0, PSEUDO_FRAME_HEADER_SIZE);
+	pHeader[0] = 'F';
+	pHeader[1] = 'P';
+	pHeader[2] = 'G';
+	pHeader[3] = 'V';
+	pHeader[4] = 'I';
+	pHeader[5] = 'M';
+	pHeader[6] = 'G';
+	pHeader[7] = '0';
+	WriteLe32(pHeader + 8, PSEUDO_FRAME_HEADER_SIZE);
+	WriteLe32(pHeader + 12, 1);
+	WriteLe32(pHeader + 16, (uint32_t)pstConfig->width);
+	WriteLe32(pHeader + 20, (uint32_t)pstConfig->height);
+	WriteLe32(pHeader + 24, (uint32_t)pstConfig->packet_bytes);
+	WriteLe32(pHeader + 28, (uint32_t)pstConfig->raw10_shift);
+	WriteLe64(pHeader + 32, ullFrameBytes);
+	WriteLe64(pHeader + 40, ullFrameId);
+}
+
+static bool HasSuffixNoCase(const std::string& value, const char* suffix)
+{
+	size_t valueLen = value.size();
+	size_t suffixLen = strlen(suffix);
+	if (valueLen < suffixLen)
+	{
+		return false;
+	}
+	for (size_t i = 0; i < suffixLen; ++i)
+	{
+		char a = value[valueLen - suffixLen + i];
+		char b = suffix[i];
+		if (a >= 'A' && a <= 'Z')
+		{
+			a = (char)(a - 'A' + 'a');
+		}
+		if (b >= 'A' && b <= 'Z')
+		{
+			b = (char)(b - 'A' + 'a');
+		}
+		if (a != b)
+		{
+			return false;
+		}
+	}
+	return true;
+}
+
+static bool IsPseudoFrameFile(const std::string& filename)
+{
+	return HasSuffixNoCase(filename, ".gray10le16") ||
+		HasSuffixNoCase(filename, ".raw16") ||
+		HasSuffixNoCase(filename, ".raw") ||
+		HasSuffixNoCase(filename, ".bin");
+}
+
+static std::string JoinPath(const char* dir, const std::string& name)
+{
+	std::string result = dir != NULL ? dir : "";
+	if (!result.empty())
+	{
+		char last = result[result.size() - 1];
+		if (last != '/' && last != '\\')
+		{
+			result += "/";
+		}
+	}
+	result += name;
+	return result;
+}
+
+static int ListPseudoFrameFiles(const char* pcDir, std::vector<std::string>* pFiles)
+{
+	if (pcDir == NULL || pFiles == NULL)
+	{
+		return -1;
+	}
+
+	pFiles->clear();
+#ifdef _WIN32
+	{
+		std::string pattern = JoinPath(pcDir, "*");
+		WIN32_FIND_DATAA findData;
+		HANDLE hFind = FindFirstFileA(pattern.c_str(), &findData);
+		if (hFind == INVALID_HANDLE_VALUE)
+		{
+			return -1;
+		}
+		do
+		{
+			if ((findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0)
+			{
+				std::string name = findData.cFileName;
+				if (IsPseudoFrameFile(name))
+				{
+					pFiles->push_back(JoinPath(pcDir, name));
+				}
+			}
+		} while (FindNextFileA(hFind, &findData));
+		FindClose(hFind);
+	}
+#else
+	{
+		DIR* pDir = opendir(pcDir);
+		if (pDir == NULL)
+		{
+			return -1;
+		}
+		struct dirent* pEntry = NULL;
+		while ((pEntry = readdir(pDir)) != NULL)
+		{
+			std::string name = pEntry->d_name;
+			if (name == "." || name == "..")
+			{
+				continue;
+			}
+			if (IsPseudoFrameFile(name))
+			{
+				pFiles->push_back(JoinPath(pcDir, name));
+			}
+		}
+		closedir(pDir);
+	}
+#endif
+	std::sort(pFiles->begin(), pFiles->end());
+	return (int)pFiles->size();
+}
+
+static int SendDmaPacket(OS_HANDLE ch, unsigned char* pData, int nDataLen)
+{
+	int nRet = cvg_pro_write_data(ch, pData, nDataLen, 0);
+	if (nRet < 0)
+	{
+		os_printf("错误: cvg_pro_write_data failed ret=%d len=%d\n", nRet, nDataLen);
+		return -1;
+	}
+	return 0;
+}
+
+static int SendPseudoFrame(OS_HANDLE ch,
+	const PseudoVideoConfig* pstConfig,
+	const char* pcFramePath,
+	uint64_t ullFrameId)
+{
+	FILE* pFile = NULL;
+	long lFileSize = 0;
+	uint64_t ullExpectedSize = 0;
+	uint64_t ullSent = 0;
+	unsigned char acHeader[PSEUDO_FRAME_HEADER_SIZE];
+	std::vector<unsigned char> packetBuffer;
+
+	if (ch == NULL || pstConfig == NULL || pcFramePath == NULL)
+	{
+		return -1;
+	}
+
+	ullExpectedSize = (uint64_t)pstConfig->width * (uint64_t)pstConfig->height * 2ull;
+	pFile = fopen(pcFramePath, "rb");
+	if (pFile == NULL)
+	{
+		os_printf("错误: 无法打开伪视频帧 %s errno=%d\n", pcFramePath, errno);
+		return -1;
+	}
+
+	if (fseek(pFile, 0, SEEK_END) != 0)
+	{
+		fclose(pFile);
+		return -1;
+	}
+	lFileSize = ftell(pFile);
+	if (lFileSize < 0)
+	{
+		fclose(pFile);
+		return -1;
+	}
+	if ((uint64_t)lFileSize != ullExpectedSize)
+	{
+		os_printf("错误: 伪视频帧大小不匹配 %s actual=%ld expected=%llu\n",
+			pcFramePath,
+			lFileSize,
+			(unsigned long long)ullExpectedSize);
+		fclose(pFile);
+		return -1;
+	}
+	if (fseek(pFile, 0, SEEK_SET) != 0)
+	{
+		fclose(pFile);
+		return -1;
+	}
+
+	BuildPseudoFrameHeader(acHeader, pstConfig, ullFrameId, ullExpectedSize);
+	if (SendDmaPacket(ch, acHeader, PSEUDO_FRAME_HEADER_SIZE) != 0)
+	{
+		fclose(pFile);
+		return -1;
+	}
+
+	packetBuffer.resize((size_t)pstConfig->packet_bytes);
+	while (ullSent < ullExpectedSize)
+	{
+		size_t stWant = packetBuffer.size();
+		size_t stLeft = (size_t)(ullExpectedSize - ullSent);
+		size_t stRead = 0;
+		if (stWant > stLeft)
+		{
+			stWant = stLeft;
+		}
+		stRead = fread(&packetBuffer[0], 1, stWant, pFile);
+		if (stRead != stWant)
+		{
+			os_printf("错误: 读取伪视频帧失败 %s sent=%llu want=%u read=%u\n",
+				pcFramePath,
+				(unsigned long long)ullSent,
+				(unsigned int)stWant,
+				(unsigned int)stRead);
+			fclose(pFile);
+			return -1;
+		}
+		if (SendDmaPacket(ch, &packetBuffer[0], (int)stRead) != 0)
+		{
+			fclose(pFile);
+			return -1;
+		}
+		ullSent += stRead;
+	}
+
+	fclose(pFile);
+	return 0;
+}
+
+static void PrintEncoderStats(const char* pcPrefix)
+{
+	EncoderPipelineStats stStats = g_stEncoderPipeline.GetStats();
+	os_printf("%s packets=%llu frames=%llu encoded=%llu dropped=%llu main10_fallbacks=%llu errors=%llu\n",
+		pcPrefix,
+		(unsigned long long)stStats.packets,
+		(unsigned long long)stStats.frames_in,
+		(unsigned long long)stStats.frames_encoded,
+		(unsigned long long)stStats.frames_dropped,
+		(unsigned long long)stStats.main10_fallbacks,
+		(unsigned long long)stStats.encode_errors);
+}
+
+static int RunPseudoVideoSender(OS_HANDLE ch, const PseudoVideoConfig* pstConfig)
+{
+	std::vector<std::string> frameFiles;
+	uint64_t ullFrameId = 0;
+	int nListRet = 0;
+
+	if (ch == NULL || pstConfig == NULL)
+	{
+		return -1;
+	}
+
+	nListRet = ListPseudoFrameFiles(pstConfig->frame_dir, &frameFiles);
+	if (nListRet <= 0)
+	{
+		os_printf("错误: 伪视频目录没有可发送帧: %s\n", pstConfig->frame_dir);
+		return -1;
+	}
+
+	os_printf("伪视频发送启动: dir=%s files=%d size=%dx%d packet=%d loop=%d max_frames=%d\n",
+		pstConfig->frame_dir,
+		nListRet,
+		pstConfig->width,
+		pstConfig->height,
+		pstConfig->packet_bytes,
+		pstConfig->loop ? 1 : 0,
+		pstConfig->max_frames);
+
+	do
+	{
+		for (size_t i = 0; i < frameFiles.size(); ++i)
+		{
+			if (pstConfig->max_frames > 0 && ullFrameId >= (uint64_t)pstConfig->max_frames)
+			{
+				PrintEncoderStats("伪视频发送结束:");
+				return 0;
+			}
+			if (SendPseudoFrame(ch, pstConfig, frameFiles[i].c_str(), ullFrameId) != 0)
+			{
+				PrintEncoderStats("伪视频发送失败:");
+				return -1;
+			}
+			ullFrameId++;
+			if ((ullFrameId % 10ull) == 0ull || g_bPrintMsg)
+			{
+				char acPrefix[128];
+				snprintf(acPrefix, sizeof(acPrefix), "伪视频已发送%llu帧:", (unsigned long long)ullFrameId);
+				PrintEncoderStats(acPrefix);
+			}
+			if (pstConfig->frame_interval_ms > 0)
+			{
+				os_sleepms((unsigned int)pstConfig->frame_interval_ms);
+			}
+		}
+	} while (pstConfig->loop);
+
+	PrintEncoderStats("伪视频发送结束:");
+	return 0;
+}
+
 /*************************************************
 Function:       ChannelRecvDataCallBack
 Description:    PCIE数据接收回调函数
@@ -830,6 +1206,7 @@ int main(void)
 	int i = 0;
 	int r = 0;
 	char c = 0;
+	PseudoVideoConfig stPseudoConfig;
 
 	printf("into main \n");
 
@@ -839,6 +1216,7 @@ int main(void)
 
 	printf("从配置文件读取通道号: 上行=%d, 下行=%d\n", nUpChannel, nDownChannel);
 	LoadEncoderConfig(&g_stEncoderConfig);
+	LoadPseudoVideoConfig(&stPseudoConfig, &g_stEncoderConfig);
 	printf("编码配置: %dx%d fps=%d bitrate=%d codec=%s input=%s main10=%s output=%s osd=%s\n",
 		g_stEncoderConfig.width,
 		g_stEncoderConfig.height,
@@ -849,6 +1227,16 @@ int main(void)
 		g_stEncoderConfig.prefer_main10 ? "prefer" : "off",
 		g_stEncoderConfig.output_path.c_str(),
 		EncoderOsdStatus(&g_stEncoderConfig));
+	if (stPseudoConfig.enable)
+	{
+		printf("伪视频发送: enable=1 dir=%s frame=%dx%d packet=%d raw10_shift=%d loop=%d\n",
+			stPseudoConfig.frame_dir,
+			stPseudoConfig.width,
+			stPseudoConfig.height,
+			stPseudoConfig.packet_bytes,
+			stPseudoConfig.raw10_shift,
+			stPseudoConfig.loop ? 1 : 0);
+	}
 
 	/* 验证通道号有效性 */
 	if (nUpChannel < 0 || nUpChannel > MAX_DEV_UP_DMA_CHL)
@@ -927,73 +1315,71 @@ int main(void)
 
 	/* 发送数据 */
 	i = 0;
-	while (1)
+	if (stPseudoConfig.enable)
 	{
-		os_printf("press any to send again (q to quit) \n");
-		c = getc(stdin);
-
-		if (c == 'q')
+		r = RunPseudoVideoSender(ch, &stPseudoConfig);
+	}
+	else
+	{
+		while (1)
 		{
-			os_printf("quit \n");
-			break;
-		}
+			os_printf("press any to send again (q to quit) \n");
+			c = getc(stdin);
 
-		os_printf("start send msg %d\n", i++);
-
-		v = 0;
-		while (v < (unsigned int)nSendLen)
-		{
-			/* 每行打印16个字节 */
-			if ((v % 16) == 0)
+			if (c == 'q')
 			{
-				if (v != 0)
+				os_printf("quit \n");
+				break;
+			}
+
+			os_printf("start send msg %d\n", i++);
+
+			v = 0;
+			while (v < (unsigned int)nSendLen)
+			{
+				/* 每行打印16个字节 */
+				if ((v % 16) == 0)
 				{
-					os_printf("\n");
+					if (v != 0)
+					{
+						os_printf("\n");
+					}
+					os_printf("%08X: ", v);
 				}
-				os_printf("%08X: ", v);
+
+				/* 打印十六进制值 */
+				os_printf("%02X ", pMsg[v]);
+
+				/* 在第8个字节后添加一个空格以便阅读 */
+				if ((v % 16) == 7)
+				{
+					os_printf(" ");
+				}
+
+				v++;
 			}
 
-			/* 打印十六进制值 */
-			os_printf("%02X ", pMsg[v]);
+			os_printf("\n");
 
-			/* 在第8个字节后添加一个空格以便阅读 */
-			if ((v % 16) == 7)
-			{
-				os_printf(" ");
-			}
+			r = cvg_pro_write_data(ch, pMsg, nSendLen, 0);
+			//os_printf("cvg_pro_write_data ret %d \n", r);
 
-			v++;
+			/* 保留原有的寄存器读取 */
+			cvg_card_readreg(dev, 0x1024, &v);
+			os_printf("%s %d 0x1024 上行: %x\n", __func__, __LINE__, v);
+
+			cvg_card_readreg(dev, 0x1028, &v);
+			os_printf("%s %d 0x1028 上行: %x\n", __func__, __LINE__, v);
+
+			cvg_card_readreg(dev, 0x200C, &v);
+			os_printf("%s %d 0x200C: %x\n", __func__, __LINE__, v);
+
+			os_printf("总共接收包数: %u (正确: %u, 错误: %u)\n",
+				g_uCorrectPackets + g_uErrorPackets, g_uCorrectPackets, g_uErrorPackets);
+			PrintEncoderStats("编码统计:");
+
+			os_sleepms(100);
 		}
-
-		os_printf("\n");
-
-		r = cvg_pro_write_data(ch, pMsg, nSendLen, 0);
-		//os_printf("cvg_pro_write_data ret %d \n", r);
-
-		/* 保留原有的寄存器读取 */
-		cvg_card_readreg(dev, 0x1024, &v);
-		os_printf("%s %d 0x1024 上行: %x\n", __func__, __LINE__, v);
-
-		cvg_card_readreg(dev, 0x1028, &v);
-		os_printf("%s %d 0x1028 上行: %x\n", __func__, __LINE__, v);
-
-		cvg_card_readreg(dev, 0x200C, &v);
-		os_printf("%s %d 0x200C: %x\n", __func__, __LINE__, v);
-
-		os_printf("总共接收包数: %u (正确: %u, 错误: %u)\n",
-			g_uCorrectPackets + g_uErrorPackets, g_uCorrectPackets, g_uErrorPackets);
-		{
-			EncoderPipelineStats stStats = g_stEncoderPipeline.GetStats();
-			os_printf("编码统计: packets=%llu frames_in=%llu encoded=%llu dropped=%llu main10_fallbacks=%llu errors=%llu\n",
-				(unsigned long long)stStats.packets,
-				(unsigned long long)stStats.frames_in,
-				(unsigned long long)stStats.frames_encoded,
-				(unsigned long long)stStats.frames_dropped,
-				(unsigned long long)stStats.main10_fallbacks,
-				(unsigned long long)stStats.encode_errors);
-		}
-
-		os_sleepms(100);
 	}
 
 	cvg_pro_stop(ch);
@@ -1013,5 +1399,5 @@ int main(void)
 			g_stEncoderConfig.output_path.c_str());
 	}
 
-	return 0;
+	return r < 0 ? -1 : 0;
 }

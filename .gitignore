@@ -60,6 +60,9 @@ RK3588Test
 WinSim/RK3588Test
 WinSim/glk200test
 WinSim/test
+pseudo_frames/
+*.gray10le16
+*.raw16
 
 # Temporary and backup files
 *~
