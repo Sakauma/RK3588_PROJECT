@@ -6,7 +6,7 @@
 
 - Vivado 版本：2025.2，FPGA 工程已完成过仿真、综合、实现和 bitstream 生成。
 - FPGA 默认使用内部伪视频源：`VIDEO_TEST_PATTERN_ENABLE=1`。
-- FPGA 输出格式：`1920x1080 gray10le16`，每像素 16bit little-endian 容器，低 10bit 有效。
+- FPGA 输出格式：`2048x2048 gray10le16`，每像素 16bit little-endian 容器，低 10bit 有效。
 - FPGA 视频 DMA 参数：`VIDEO_DMA_CH=1`。
 - RK3588 默认输入格式：`INPUT_PIXEL_FORMAT=gray10le16`，编码输出 H.265。
 
@@ -94,9 +94,10 @@ ls -lh /tmp/offline_gray10.h265
 确认 `rk3588.ini`：
 
 ```ini
-UP_LOOP_DMA_CHANNUM=5
-FRAME_WIDTH=1920
-FRAME_HEIGHT=1080
+UP_LOOP_DMA_CHANNUM=1
+DOWN_LOOP_DMA_CHANNUM=0
+FRAME_WIDTH=2048
+FRAME_HEIGHT=2048
 INPUT_PIXEL_FORMAT=gray10le16
 VIDEO_CODEC=h265
 VIDEO_OUTPUT_PATH=/tmp/rk3588_capture.h265

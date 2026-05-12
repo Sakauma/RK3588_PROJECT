@@ -5,8 +5,8 @@
 ## 当前默认参数
 
 - FPGA 输入模式：`VIDEO_SOURCE_MODE=2`，即 RK3588 DMA 下行伪视频注入。
-- FPGA 下行注入通道：`VIDEO_LOAD_DMA_CH=0`，对应 RK 配置 `DOWN_LOOP_DMA_CHANNUM=4`。
-- FPGA 上行视频通道：`VIDEO_DMA_CH=1`，对应 RK 配置 `UP_LOOP_DMA_CHANNUM=5`。
+- FPGA 下行注入通道：`VIDEO_LOAD_DMA_CH=0`，对应 RK 配置 `DOWN_LOOP_DMA_CHANNUM=0`。
+- FPGA 上行视频通道：`VIDEO_DMA_CH=1`，对应 RK 配置 `UP_LOOP_DMA_CHANNUM=1`。
 - 帧格式：`2048x2048 gray10le16`，单帧大小 `2048 * 2048 * 2 = 8388608` 字节。
 - 发送分片：64B 帧头 + 4096B payload 分片。
 
@@ -36,8 +36,8 @@ scp "D:\Staff\test\pseudo_frames\*.gray10le16" root@192.168.1.100:/root/RK3588_P
 确认 `rk3588.ini` 包含：
 
 ```ini
-UP_LOOP_DMA_CHANNUM=5
-DOWN_LOOP_DMA_CHANNUM=4
+UP_LOOP_DMA_CHANNUM=1
+DOWN_LOOP_DMA_CHANNUM=0
 PSEUDO_SEND_ENABLE=1
 PSEUDO_FRAME_DIR=/root/RK3588_PROJECT/pseudo_frames
 PSEUDO_PACKET_BYTES=4096

@@ -1,6 +1,6 @@
 # RK3588 PCIe FPGA-preprocessed video encoder configuration
-UP_LOOP_DMA_CHANNUM=5
-DOWN_LOOP_DMA_CHANNUM=4
+UP_LOOP_DMA_CHANNUM=1
+DOWN_LOOP_DMA_CHANNUM=0
 
 # FPGA downlink pseudo video injection. Copy converted frames to this directory on RK3588.
 PSEUDO_SEND_ENABLE=1

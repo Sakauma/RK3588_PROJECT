@@ -12,7 +12,7 @@
 
 当前版本通过 PCIe SDK 接收图像数据；后续如果硬件团队改为 SRIO 接收，本工程不实现 SRIO 协议和驱动，只对接他们提供的 SDK。算法层固定接收“完整或分片的 gray10le16 payload”，入口保持为 `EncoderPipeline::SubmitPacket`，因此迁移时只替换输入适配代码，不改组帧、编码输入准备、MPP 编码和测试工具。
 
-根据 FPGA RTL，当前视频出口为 `gray10le16`：每 64bit 包含 4 个 16bit little-endian 像素容器，低 10bit 有效。默认帧大小为 `1920 * 1080 * 2 = 4147200` 字节，对应 `VIDEO_DMA_CH=1`。
+根据 FPGA RTL，当前视频出口为 `gray10le16`：每 64bit 包含 4 个 16bit little-endian 像素容器，低 10bit 有效。默认伪视频联调帧大小为 `2048 * 2048 * 2 = 8388608` 字节，对应 `VIDEO_DMA_CH=1`。
 
 ## 官方代码学习顺序
 
@@ -31,7 +31,7 @@
 
 ## 配置重点
 
-- `FRAME_WIDTH`、`FRAME_HEIGHT` 必须与 FPGA 拼接输出一致；当前复制单路验证时仍为 `1920x1080`。
+- `FRAME_WIDTH`、`FRAME_HEIGHT` 必须与 FPGA 拼接输出一致；当前伪视频复制单路验证为 `2048x2048`。
 - `INPUT_PIXEL_FORMAT=gray10le16` 表示 10bit 灰度像素放在 16bit little-endian 容器中，帧大小仍是 `width * height * 2`。
 - `INPUT_PIXEL_FORMAT=nv12` 是预留模式；只有 FPGA 后续直接输出 packed NV12 时才启用。
 - `PREFER_MAIN10=0` 是默认值；当前工程按 8-bit NV12 接入 MPP，真 10-bit 编码需另行验证。

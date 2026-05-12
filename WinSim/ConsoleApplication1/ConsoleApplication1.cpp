@@ -47,8 +47,8 @@ Modification: 增加YUV文件保存功能，每个报文独立保存
 #include "shellcmd.h"
 
 /* 宏定义 */
-#define UP_LOOP_DMA_CHANNUM    (2)     /* 自回环上行DMA */
-#define DOWN_LOOP_DMA_CHANNUM  (2)     /* 自回环下行DMA */
+#define UP_LOOP_DMA_CHANNUM    (1)     /* FPGA VIDEO_DMA_CH=1 */
+#define DOWN_LOOP_DMA_CHANNUM  (0)     /* FPGA VIDEO_LOAD_DMA_CH=0 */
 #define CONFIG_FILE_NAME       "rk3588.ini"  /* 配置文件名称 */
 #define MAX_CHANNEL_NUM        (31)    /* 最大通道号限制 */
 #define PSEUDO_FRAME_HEADER_SIZE 64
@@ -1276,6 +1276,16 @@ int main(void)
 
 	/* 打开板卡后进行基本功能设置 */
 	ch = cvg_open_chan(dev, nUpChannel, nDownChannel);
+	if (ch == NULL && stPseudoConfig.enable &&
+		(nUpChannel != UP_LOOP_DMA_CHANNUM || nDownChannel != DOWN_LOOP_DMA_CHANNUM))
+	{
+		printf("open channel failed, retry pseudo defaults up=%d down=%d\n",
+			UP_LOOP_DMA_CHANNUM,
+			DOWN_LOOP_DMA_CHANNUM);
+		nUpChannel = UP_LOOP_DMA_CHANNUM;
+		nDownChannel = DOWN_LOOP_DMA_CHANNUM;
+		ch = cvg_open_chan(dev, nUpChannel, nDownChannel);
+	}
 	if (ch == NULL)
 	{
 		printf("open channel failed \n");
