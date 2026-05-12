@@ -1,5 +1,7 @@
 # RK3588_PROJECT
 
+FPGA + RK3588 上板联调步骤见 `docs/FPGA_RK3588_BOARD_BRINGUP.md`，包含 SSH、驱动加载、编译、离线编码测试和 PCIe 实测流程。
+
 本工程用于 RK3588 接收 FPGA 预处理后的视频流并编码保存。当前硬件链路为：
 
 `FPGA(SRIO/视频输入 + OSD + 16bit->10bit) -> PCIe gray10le16 -> RK3588 NV12准备 -> Rockchip MPP -> .h264/.h265`
