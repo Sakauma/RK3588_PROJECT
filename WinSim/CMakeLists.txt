@@ -1,141 +1,105 @@
-# WinSim/CMakeLists.txt - RK3588 FPGA-preprocessed video encoder application
+# WinSim/CMakeLists.txt - RK3588 V7 PCIe/SRIO live camera test
 
 cmake_minimum_required(VERSION 3.10)
 project(RK3588Test VERSION 1.0.0 LANGUAGES C CXX)
 
-set(CMAKE_C_STANDARD 99)
-set(CMAKE_CXX_STANDARD 11)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
-option(ENABLE_RKMPP "Enable Rockchip MPP hardware encoder support" ON)
-option(ENABLE_RGA "Search for Rockchip librga for future accelerated preprocessing" ON)
-option(BUILD_OFFLINE_ENCODER_TEST "Build synthetic gray10le16/NV12-to-MPP encoder test" ON)
-option(BUILD_FRAME_ASSEMBLER_SMOKE_TEST "Build PCIe packet-to-frame assembler smoke test" ON)
-
+# 检测是否为交叉编译
 if(CMAKE_CROSSCOMPILING)
-    message(STATUS "Cross compiling for ${CMAKE_SYSTEM_PROCESSOR}")
+    message(STATUS "交叉编译模式 - 目标架构: ${CMAKE_SYSTEM_PROCESSOR}")
+    set(TARGET_ARCH "arm64")
 else()
-    message(STATUS "Native build")
+    message(STATUS "本地编译模式")
+    set(TARGET_ARCH "x86_64")
 endif()
 
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g")
+# 设置编译选项
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -fpermissive")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g")
+
+# 在交叉编译时可能需要额外的标志
 if(CMAKE_CROSSCOMPILING)
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fPIC")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fPIC")
 endif()
 
+# 源文件
 set(WINSIM_SOURCES
     ConsoleApplication1/ConsoleApplication1.cpp
-    encoder/frame_assembler.cpp
-    encoder/raw16_preprocess.cpp
-    encoder/osd_overlay.cpp
-    encoder/rk_mpp_encoder.cpp
-    encoder/encoder_pipeline.cpp
 )
 
+# 创建可执行文件
 add_executable(RK3588Test ${WINSIM_SOURCES})
 
+# 设置运行时库搜索路径为可执行文件所在目录
 set_target_properties(RK3588Test PROPERTIES
-    OUTPUT_NAME "RK3588Test"
-    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
     BUILD_RPATH "\$ORIGIN"
     INSTALL_RPATH "\$ORIGIN"
 )
 
+
+# 包含目录
 target_include_directories(RK3588Test PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/ConsoleApplication1
     ${CMAKE_CURRENT_SOURCE_DIR}/ConsoleApplication1/shell
-    ${CMAKE_CURRENT_SOURCE_DIR}/encoder
 )
 
-set(RK3588API_INCLUDE_DIR
-    "${CMAKE_CURRENT_SOURCE_DIR}/../RK3588API"
-    CACHE PATH "RK3588API header directory")
-set(RK3588API_LIBRARY
-    "${CMAKE_CURRENT_SOURCE_DIR}/../libRK3588.so"
-    CACHE FILEPATH "RK3588 SDK shared library")
-
-if(EXISTS "${RK3588API_INCLUDE_DIR}")
-    target_include_directories(RK3588Test PRIVATE "${RK3588API_INCLUDE_DIR}")
-    message(STATUS "RK3588API include dir: ${RK3588API_INCLUDE_DIR}")
+# RK3588API头文件路径，默认使用当前SDK目录内的RK3588API
+set(RK3588API_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../RK3588API CACHE PATH "RK3588API头文件目录")
+if(EXISTS ${RK3588API_INCLUDE_DIR})
+    target_include_directories(RK3588Test PRIVATE ${RK3588API_INCLUDE_DIR})
+    message(STATUS "找到RK3588API头文件目录: ${RK3588API_INCLUDE_DIR}")
 else()
-    message(FATAL_ERROR "RK3588API include dir not found: ${RK3588API_INCLUDE_DIR}")
+    message(WARNING "RK3588API头文件目录不存在: ${RK3588API_INCLUDE_DIR}")
 endif()
 
-if(EXISTS "${RK3588API_LIBRARY}")
-    target_link_libraries(RK3588Test PRIVATE "${RK3588API_LIBRARY}")
-    message(STATUS "RK3588API library: ${RK3588API_LIBRARY}")
-else()
-    message(FATAL_ERROR "RK3588API library not found: ${RK3588API_LIBRARY}")
-endif()
-
+# 查找pthread和libjpeg库
 set(THREADS_PREFER_PTHREAD_FLAG TRUE)
 find_package(Threads REQUIRED)
-target_link_libraries(RK3588Test PRIVATE Threads::Threads)
 
-if(ENABLE_RKMPP)
-    find_path(MPP_INCLUDE_DIR
-        NAMES rk_mpi.h
-        PATH_SUFFIXES rockchip)
-    find_library(MPP_LIBRARY
-        NAMES rockchip_mpp mpp)
-
-    if(MPP_INCLUDE_DIR AND MPP_LIBRARY)
-        target_compile_definitions(RK3588Test PRIVATE HAVE_RKMPP)
-        target_include_directories(RK3588Test PRIVATE "${MPP_INCLUDE_DIR}")
-        target_link_libraries(RK3588Test PRIVATE "${MPP_LIBRARY}")
-        message(STATUS "Rockchip MPP include: ${MPP_INCLUDE_DIR}")
-        message(STATUS "Rockchip MPP library: ${MPP_LIBRARY}")
+# HTTP MJPEG输出使用libjpeg做灰度JPEG编码，不再依赖opencv-mobile/httpjpg。
+find_package(JPEG QUIET)
+if(NOT JPEG_FOUND)
+    find_library(JPEG_LIBRARY NAMES jpeg)
+    if(NOT JPEG_LIBRARY)
+        message(FATAL_ERROR "libjpeg not found. Install libjpeg-dev on RK3588.")
+    endif()
+    set(JPEG_LIBS ${JPEG_LIBRARY})
+else()
+    if(TARGET JPEG::JPEG)
+        set(JPEG_LIBS JPEG::JPEG)
     else()
-        message(WARNING "Rockchip MPP not found; encoder builds with runtime stub only")
+        set(JPEG_LIBS ${JPEG_LIBRARIES})
+        target_include_directories(RK3588Test PRIVATE ${JPEG_INCLUDE_DIRS})
     endif()
 endif()
 
-if(ENABLE_RGA)
-    find_path(RGA_INCLUDE_DIR
-        NAMES rga.h
-        PATH_SUFFIXES rga rockchip)
-    find_library(RGA_LIBRARY
-        NAMES rga)
+# RK3588库路径，默认使用当前SDK目录内的libRK3588.so
+set(RK3588_LIB_PATH ${CMAKE_CURRENT_SOURCE_DIR}/../libRK3588.so CACHE FILEPATH "RK3588库文件路径")
 
-    if(RGA_INCLUDE_DIR AND RGA_LIBRARY)
-        target_compile_definitions(RK3588Test PRIVATE HAVE_RGA)
-        target_include_directories(RK3588Test PRIVATE "${RGA_INCLUDE_DIR}")
-        target_link_libraries(RK3588Test PRIVATE "${RGA_LIBRARY}")
-        message(STATUS "Rockchip RGA include: ${RGA_INCLUDE_DIR}")
-        message(STATUS "Rockchip RGA library: ${RGA_LIBRARY}")
-    else()
-        message(STATUS "Rockchip RGA not found; CPU grayscale/NV12 input preparation will be used")
-    endif()
+if(EXISTS ${RK3588_LIB_PATH})
+    message(STATUS "找到RK3588库: ${RK3588_LIB_PATH}")
+    target_link_libraries(RK3588Test PRIVATE ${RK3588_LIB_PATH} ${JPEG_LIBS} Threads::Threads)
+else()
+    # 如果库不存在，给出明确的编译指令
+    message(FATAL_ERROR "
+    RK3588库不存在: ${RK3588_LIB_PATH}
+
+    请先确认RK3588库存在:
+
+    1. 确认库文件已生成或拷贝到SDK目录:
+       ls -la ${RK3588_LIB_PATH}
+
+    2. 然后再重新编译测试程序:
+       cd WinSim/build_arm64
+       make clean && cmake .. && make
+    ")
 endif()
 
-if(BUILD_OFFLINE_ENCODER_TEST)
-    add_executable(offline_encode_test
-        tools/offline_encode_test.cpp
-        encoder/raw16_preprocess.cpp
-        encoder/osd_overlay.cpp
-        encoder/rk_mpp_encoder.cpp
-    )
-    target_include_directories(offline_encode_test PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}
-        ${CMAKE_CURRENT_SOURCE_DIR}/encoder
-    )
-    if(MPP_INCLUDE_DIR AND MPP_LIBRARY)
-        target_compile_definitions(offline_encode_test PRIVATE HAVE_RKMPP)
-        target_include_directories(offline_encode_test PRIVATE "${MPP_INCLUDE_DIR}")
-        target_link_libraries(offline_encode_test PRIVATE "${MPP_LIBRARY}")
-    endif()
-endif()
+# 设置输出属性
+set_target_properties(RK3588Test PROPERTIES
+    OUTPUT_NAME "RK3588Test"
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
+)
 
-if(BUILD_FRAME_ASSEMBLER_SMOKE_TEST)
-    add_executable(frame_assembler_smoke_test
-        tools/frame_assembler_smoke_test.cpp
-        encoder/frame_assembler.cpp
-    )
-    target_include_directories(frame_assembler_smoke_test PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}
-        ${CMAKE_CURRENT_SOURCE_DIR}/encoder
-    )
-endif()
+# 安装规则（可选）
+# install(TARGETS RK3588Test DESTINATION bin)

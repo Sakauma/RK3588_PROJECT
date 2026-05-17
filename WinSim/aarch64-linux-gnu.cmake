@@ -1,0 +1,32 @@
+# aarch64-linux-gnu.cmake
+
+# 目标系统
+set(CMAKE_SYSTEM_NAME Linux)
+set(CMAKE_SYSTEM_PROCESSOR aarch64)
+
+# 工具链前缀
+set(TOOLCHAIN_PREFIX "aarch64-none-linux-gnu-")
+
+# 编译器设置
+set(CMAKE_C_COMPILER ${TOOLCHAIN_PREFIX}gcc)
+set(CMAKE_CXX_COMPILER ${TOOLCHAIN_PREFIX}g++)
+set(CMAKE_ASM_COMPILER ${TOOLCHAIN_PREFIX}gcc)
+set(CMAKE_AR ${TOOLCHAIN_PREFIX}ar)
+set(CMAKE_RANLIB ${TOOLCHAIN_PREFIX}ranlib)
+set(CMAKE_STRIP ${TOOLCHAIN_PREFIX}strip)
+
+# 查找路径设置
+set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
+set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
+set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
+set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE ONLY)
+
+# 系统根目录（如果有sysroot）
+# set(CMAKE_SYSROOT /path/to/sysroot)
+
+# 编译标志
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fPIC")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC")
+
+# 跨平台定义
+add_definitions(-D__ARM_ARCH=8 -D__aarch64__)

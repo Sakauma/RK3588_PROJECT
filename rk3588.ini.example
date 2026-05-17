@@ -1,49 +1,43 @@
-# RK3588 PCIe FPGA-preprocessed video encoder configuration
-UP_LOOP_DMA_CHANNUM=1
+# RK3588 PCIe test config
+
+# DMA channels: keep V7 receive on 0/0
+UP_LOOP_DMA_CHANNUM=0
 DOWN_LOOP_DMA_CHANNUM=0
 
-# FPGA downlink pseudo video injection. Copy converted frames to this directory on RK3588.
-PSEUDO_SEND_ENABLE=1
-PSEUDO_FRAME_DIR=/root/RK3588_PROJECT/pseudo_frames
-PSEUDO_PACKET_BYTES=4096
-PSEUDO_LOOP=1
-PSEUDO_MAX_FRAMES=0
-PSEUDO_FRAME_INTERVAL_MS=0
-PSEUDO_RAW10_SHIFT=6
+# Legacy packet save path
+YUV_SAVE_PATH=/tmp/pcie_yuv/
 
-# Keep callback logs low for real-time capture.
-PRINTF_UP_MAG=0
+# Print detail logs: 1=enable, 0=disable
+PRINTF_UP_MAG=1
 
-FRAME_WIDTH=2048
-FRAME_HEIGHT=2048
-VIDEO_CODEC=h265
-FRAME_FPS=30
-VIDEO_BITRATE=8000000
-VIDEO_OUTPUT_PATH=/tmp/rk3588_capture.h265
+# V7 PNG frame output (diagnostic/local only)
+PNG_SAVE_PATH=/tmp/pcie_yuv/
+PNG_SCALE_MODE=minmax
 
-# FPGA sends gray10le16: 10-bit grayscale samples in a 16-bit little-endian container.
-# OSD and 16-bit to 10-bit conversion are completed in FPGA before PCIe transfer.
-INPUT_PIXEL_FORMAT=gray10le16
-PREFER_MAIN10=0
+# SCP is no longer used; RK3588 serves live frames over HTTP JPG.
+TRANSFER_ENABLE=0
 
-# gray10le16 to 8-bit NV12 encoder input mapping.
-# shift       - Y = raw16 >> RAW16_SHIFT, fastest.
-# window      - map RAW16_BLACK_LEVEL..RAW16_WHITE_LEVEL to 0..255.
-# auto_window - per-frame histogram stretch, clipping the configured outliers.
-RAW16_MAP_MODE=window
-RAW16_SHIFT=2
-RAW16_BLACK_LEVEL=0
-RAW16_WHITE_LEVEL=1023
-RAW16_AUTO_LOW_CLIP_PERMILLE=5
-RAW16_AUTO_HIGH_CLIP_PERMILLE=5
-RAW16_LITTLE_ENDIAN=1
-INPUT_HAS_IMG_DMA_HEADER=0
+# V7 live camera stream. Open http://192.168.1.100:7766 in a browser.
+STREAM_ENABLE=1
+STREAM_PORT=7766
+STREAM_MODE=lossless
+STREAM_JPEG_QUALITY=85
+STREAM_REPEAT_FPS=10
+STREAM_MAX_CLIENTS=4
+STREAM_SEND_TIMEOUT_MS=800
+STREAM_MAX_MEM_FRAMES=8
+STREAM_SPOOL_PATH=/tmp/pcie_yuv/spool/
+STREAM_MAX_SPOOL_GB=8
+STREAM_SCALE_MODE=minmax
+STREAM_PARTIAL_ENABLE=1
+STREAM_MIN_IMAGE_PACKETS=28000
 
-# OSD_MODE:
-# burned-in - OSD is already present in FPGA output; never draw software OSD.
-# auto      - legacy/software fallback mode when external metadata is supplied.
-OSD_MODE=burned-in
-OSD_ENABLE=0
-OSD_TEST_ENABLE=0
+# Raw diagnostic capture for non-SWRITE packets such as ftype=0x5.
+# These files are samples only and are not used to generate images.
+RAW_CAPTURE_ENABLE=0
+RAW_CAPTURE_PATH=/tmp/pcie_yuv/raw/
+RAW_CAPTURE_MAX_FILES=8
+RAW_CAPTURE_MAX_BYTES_PER_PACKET=512
 
-ENCODER_QUEUE_DEPTH=3
+# High-rate receive path: keep SWRITE trace disabled unless diagnosing addresses.
+SWRITE_TRACE_ENABLE=0
